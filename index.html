@@ -663,9 +663,11 @@ moloch => Molok"></textarea>
     renderBase();
   });
 
-  // Prevent accidental page scroll/bounce
+  // Prevent accidental page scroll/bounce, but never block scrolling
+  // inside the transcript box or the settings sheet itself.
+  var sheetEl = document.getElementById("sheet");
   document.addEventListener("touchmove", function(e){
-    if(!transcriptEl.contains(e.target)) e.preventDefault();
+    if(!transcriptEl.contains(e.target) && !sheetEl.contains(e.target)) e.preventDefault();
   }, { passive:false });
 
 })();
