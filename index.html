@@ -64,9 +64,6 @@
     padding:11px 0; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;
   }
   .toolbar button:active{background:var(--panel2);}
-  .toolbar button:disabled{opacity:.55;}
-  .toolbar button.polish{background:var(--accent); border-color:var(--accent); color:white;}
-  .toolbar button.polish:active{background:var(--accent2);}
 
   .recwrap{
     display:flex; flex-direction:column; align-items:center; gap:8px;
@@ -147,7 +144,6 @@
   <div id="transcript" data-placeholder="Your dictated text will appear here…" contenteditable="true"></div>
   <div class="toolbar">
     <button id="copyBtn">Copy</button>
-    <button id="polishBtn" class="polish">Polish</button>
     <button id="shareBtn">Share</button>
     <button id="clearBtn">Clear</button>
   </div>
@@ -184,20 +180,6 @@
         <option value="nova-3">Nova-3 (best accuracy, recommended)</option>
         <option value="nova-2">Nova-2</option>
       </select>
-    </div>
-
-    <div class="field">
-      <label>Claude API Key (for the Polish button)</label>
-      <div class="rowflex">
-        <input type="password" id="claudeKey" placeholder="Paste your Claude API key">
-        <button id="toggleClaudeKey">Show</button>
-      </div>
-      <div class="hint">
-        Only needed if you want to use Polish. Get a key at
-        <a href="https://platform.claude.com/settings/keys" target="_blank">platform.claude.com/settings/keys</a>
-        (sign up, then Create key). This one isn't free like Deepgram — Anthropic bills per use, but Polish uses a
-        cheap, fast model so each cleanup costs a small fraction of a cent. Stored only on this phone.
-      </div>
     </div>
 
     <div class="field">
@@ -243,7 +225,6 @@ moloch => Molok"></textarea>
     try{ s = JSON.parse(localStorage.getItem("dictate_settings") || "{}"); }catch(e){ s = {}; }
     return {
       apiKey: s.apiKey || "",
-      claudeKey: s.claudeKey || "",
       model: s.model || "nova-3",
       vocab: (s.vocab !== undefined) ? s.vocab : DEFAULT_VOCAB,
       correct: (s.correct !== undefined) ? s.correct : DEFAULT_CORRECT,
@@ -268,8 +249,6 @@ moloch => Molok"></textarea>
   var saveBtn = document.getElementById("saveBtn");
   var apiKeyInput = document.getElementById("apiKey");
   var toggleKeyBtn = document.getElementById("toggleKey");
-  var claudeKeyInput = document.getElementById("claudeKey");
-  var toggleClaudeKeyBtn = document.getElementById("toggleClaudeKey");
   var modelSelect = document.getElementById("modelSelect");
   var vocabField = document.getElementById("vocabField");
   var correctField = document.getElementById("correctField");
@@ -277,7 +256,6 @@ moloch => Molok"></textarea>
   var toggleEmoji = document.getElementById("toggleEmoji");
   var toggleSmart = document.getElementById("toggleSmart");
   var copyBtn = document.getElementById("copyBtn");
-  var polishBtn = document.getElementById("polishBtn");
   var shareBtn = document.getElementById("shareBtn");
   var clearBtn = document.getElementById("clearBtn");
   var installTip = document.getElementById("installTip");
@@ -285,7 +263,6 @@ moloch => Molok"></textarea>
 
   function fillSheetFromSettings(){
     apiKeyInput.value = settings.apiKey;
-    claudeKeyInput.value = settings.claudeKey;
     modelSelect.value = settings.model;
     vocabField.value = settings.vocab;
     correctField.value = settings.correct;
@@ -304,15 +281,9 @@ moloch => Molok"></textarea>
     if(apiKeyInput.type === "password"){ apiKeyInput.type = "text"; toggleKeyBtn.textContent = "Hide"; }
     else{ apiKeyInput.type = "password"; toggleKeyBtn.textContent = "Show"; }
   });
-  toggleClaudeKeyBtn.addEventListener("click", function(){
-    if(claudeKeyInput.type === "password"){ claudeKeyInput.type = "text"; toggleClaudeKeyBtn.textContent = "Hide"; }
-    else{ claudeKeyInput.type = "password"; toggleClaudeKeyBtn.textContent = "Show"; }
-  });
-
   saveBtn.addEventListener("click", function(){
     settings = {
       apiKey: apiKeyInput.value.trim(),
-      claudeKey: claudeKeyInput.value.trim(),
       model: modelSelect.value,
       vocab: vocabField.value,
       correct: correctField.value,
@@ -690,74 +661,6 @@ moloch => Molok"></textarea>
     localStorage.setItem("dictate_last_transcript", "");
     renderBase();
   });
-
-  // ---------- Polish (Claude cleanup) ----------
-  var POLISH_SYSTEM_PROMPT =
-    "You clean up raw speech-to-text transcripts dictated by someone who runs a waste-hauling/dumpster " +
-    "rental business (Subcontain, Vertex Waste Management, Molok, roll-offs, hauling, etc.). Rewrite the " +
-    "text so it reads smoothly: fix grammar and sentence structure, add correct punctuation, remove filler " +
-    "words, false starts, stutters, and repeated corrections (e.g. \"big, no wait, small\" becomes just " +
-    "\"small\"). Keep the person's actual meaning, facts, names, numbers, and business/product terms exactly " +
-    "as intended — never invent or drop details. Keep the tone plain and conversational, the way the person " +
-    "actually talks, not stiff or corporate. Preserve paragraph breaks where they make sense. Reply with " +
-    "ONLY the cleaned-up text — no preamble, no quotation marks, no explanation.";
-
-  function polishText(){
-    var text = transcriptEl.textContent;
-    if(!text || !text.trim()){
-      setStatus("Nothing to polish");
-      return;
-    }
-    if(!settings.claudeKey){
-      fillSheetFromSettings();
-      overlay.style.display = "flex";
-      setTimeout(function(){ claudeKeyInput.focus(); }, 300);
-      return;
-    }
-    polishBtn.disabled = true;
-    polishBtn.textContent = "Polishing…";
-    setStatus("Polishing with Claude…");
-
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": settings.claudeKey,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
-        system: POLISH_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: text }]
-      })
-    }).then(function(res){
-      if(!res.ok){
-        return res.json().catch(function(){ return null; }).then(function(body){
-          var msg = (body && body.error && body.error.message) ? body.error.message : ("HTTP " + res.status);
-          throw new Error(msg);
-        });
-      }
-      return res.json();
-    }).then(function(data){
-      var block = data && data.content && data.content[0];
-      var cleaned = block && block.text;
-      if(!cleaned) throw new Error("No text came back");
-      finalText = cleaned.trim();
-      localStorage.setItem("dictate_last_transcript", finalText);
-      renderBase();
-      scrollToBottom();
-      setStatus("Polished");
-    }).catch(function(err){
-      setStatus("Polish failed: " + err.message, true);
-    }).finally(function(){
-      polishBtn.disabled = false;
-      polishBtn.textContent = "Polish";
-    });
-  }
-
-  polishBtn.addEventListener("click", polishText);
 
   // Prevent accidental page scroll/bounce, but never block scrolling
   // inside the transcript box or the settings sheet itself.
