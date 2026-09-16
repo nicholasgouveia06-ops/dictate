@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Dictate</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dictate">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0d10">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23ff5a36'/%3E%3Ctext x='50' y='68' font-size='58' text-anchor='middle' fill='white' font-family='sans-serif'%3E%F0%9F%8E%99%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#161a1f; --panel2:#1e242b; --border:#2a323b;
+    --text:#f2f4f6; --muted:#8b96a3; --accent:#ff5a36; --accent2:#ff7a56;
+    --danger:#ff4d4d; --safe:#2ecc71;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Segoe UI,Roboto,sans-serif;
+    display:flex; flex-direction:column;
+    padding-top:env(safe-area-inset-top); padding-bottom:env(safe-area-inset-bottom);
+    overflow:hidden;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px 10px; flex-shrink:0;
+  }
+  header h1{font-size:19px; margin:0; font-weight:650; letter-spacing:-.2px;}
+  header .status{font-size:12px; color:var(--muted); margin-top:2px;}
+  .iconbtn{
+    background:var(--panel); border:1px solid var(--border); color:var(--text);
+    width:38px; height:38px; border-radius:12px; font-size:18px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+  }
+  .iconbtn:active{background:var(--panel2);}
+  #installTip{
+    margin:0 16px 8px; padding:10px 12px; background:var(--panel);
+    border:1px solid var(--border); border-radius:12px; font-size:12.5px; color:var(--muted);
+    display:none; align-items:center; gap:8px; flex-shrink:0;
+  }
+  #installTip button{background:none;border:none;color:var(--accent);font-size:12.5px;font-weight:600;cursor:pointer;padding:0 0 0 6px;}
+  #installTip .x{margin-left:auto; color:var(--muted); font-size:16px; cursor:pointer; padding:0 4px;}
+
+  main{flex:1; overflow:hidden; display:flex; flex-direction:column; padding:0 16px;}
+  #transcript{
+    flex:1; overflow-y:auto; background:var(--panel); border:1px solid var(--border);
+    border-radius:16px; padding:16px; font-size:19px; line-height:1.55;
+    -webkit-overflow-scrolling:touch; white-space:pre-wrap; word-wrap:break-word;
+  }
+  #transcript:empty::before, #transcript.placeholder::before{
+    content:attr(data-placeholder); color:var(--muted);
+  }
+  .interim{color:var(--muted); font-style:italic;}
+
+  .toolbar{
+    display:flex; gap:10px; padding:12px 0; flex-shrink:0;
+  }
+  .toolbar button{
+    flex:1; background:var(--panel); border:1px solid var(--border); color:var(--text);
+    padding:11px 0; border-radius:12px; font-size:14px; font-weight:600; cursor:pointer;
+  }
+  .toolbar button:active{background:var(--panel2);}
+
+  .recwrap{
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    padding:8px 0 18px; flex-shrink:0;
+  }
+  #recBtn{
+    width:78px; height:78px; border-radius:50%; border:none; cursor:pointer;
+    background:var(--accent); box-shadow:0 0 0 6px rgba(255,90,54,.15);
+    display:flex; align-items:center; justify-content:center; transition:transform .1s;
+  }
+  #recBtn:active{transform:scale(.94);}
+  #recBtn svg{width:30px; height:30px; fill:white;}
+  #recBtn.recording{
+    background:var(--danger); box-shadow:0 0 0 6px rgba(255,77,77,.18);
+    animation:pulse 1.6s infinite;
+  }
+  #recBtn.recording svg{width:24px; height:24px; border-radius:5px;}
+  @keyframes pulse{0%{box-shadow:0 0 0 6px rgba(255,77,77,.18);}50%{box-shadow:0 0 0 14px rgba(255,77,77,.06);}100%{box-shadow:0 0 0 6px rgba(255,77,77,.18);}}
+  #recLabel{font-size:12.5px; color:var(--muted); min-height:16px;}
+
+  /* Settings modal */
+  #overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.55); display:none;
+    align-items:flex-end; z-index:20;
+  }
+  #sheet{
+    background:var(--bg); width:100%; max-height:88vh; border-radius:20px 20px 0 0;
+    padding:18px 18px calc(24px + env(safe-area-inset-bottom));
+    overflow-y:auto; border-top:1px solid var(--border);
+  }
+  #sheet h2{margin:0 0 14px; font-size:18px;}
+  .field{margin-bottom:16px;}
+  .field label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px; font-weight:600; text-transform:uppercase; letter-spacing:.3px;}
+  .field .hint{font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4;}
+  .field .hint a{color:var(--accent2);}
+  input[type=text], input[type=password], textarea, select{
+    width:100%; background:var(--panel); border:1px solid var(--border); color:var(--text);
+    padding:11px 12px; border-radius:10px; font-size:15px; font-family:inherit;
+  }
+  textarea{resize:vertical; min-height:64px; line-height:1.5;}
+  .rowflex{display:flex; gap:8px;}
+  .rowflex input{flex:1;}
+  .rowflex button{background:var(--panel2); border:1px solid var(--border); color:var(--text); border-radius:10px; padding:0 14px; font-size:13px; cursor:pointer;}
+  .toggle-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);}
+  .toggle-row:last-child{border-bottom:none;}
+  .toggle-row div{font-size:14.5px;}
+  .toggle-row .sub{font-size:12px; color:var(--muted); margin-top:2px;}
+  .switch{position:relative; width:46px; height:27px; flex-shrink:0;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider{position:absolute; inset:0; background:var(--panel2); border:1px solid var(--border); border-radius:27px; cursor:pointer; transition:.15s;}
+  .slider:before{content:""; position:absolute; width:21px; height:21px; left:2px; top:2px; background:#fff; border-radius:50%; transition:.15s;}
+  input:checked + .slider{background:var(--accent);}
+  input:checked + .slider:before{transform:translateX(19px);}
+  #saveBtn{
+    width:100%; background:var(--accent); color:white; border:none; padding:14px 0;
+    border-radius:12px; font-size:16px; font-weight:650; cursor:pointer; margin-top:6px;
+  }
+  #closeSheet{position:absolute; top:16px; right:18px; color:var(--muted); font-size:22px; background:none; border:none; cursor:pointer;}
+  #sheet{position:relative;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Dictate</h1>
+    <div class="status" id="statusLine">Tap to start</div>
+  </div>
+  <button class="iconbtn" id="settingsBtn" aria-label="Settings">⚙️</button>
+</header>
+
+<div id="installTip">
+  <span>Add this to your Home Screen: tap Share, then "Add to Home Screen".</span>
+  <span class="x" id="dismissTip">✕</span>
+</div>
+
+<main>
+  <div id="transcript" data-placeholder="Your dictated text will appear here…" contenteditable="true"></div>
+  <div class="toolbar">
+    <button id="copyBtn">Copy</button>
+    <button id="shareBtn">Share</button>
+    <button id="clearBtn">Clear</button>
+  </div>
+</main>
+
+<div class="recwrap">
+  <button id="recBtn" aria-label="Record">
+    <svg id="micIcon" viewBox="0 0 24 24"><path d="M12 15a3 3 0 003-3V6a3 3 0 10-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-2.08A7 7 0 0019 12h-2z"/></svg>
+  </button>
+  <div id="recLabel">Tap the mic to start dictating</div>
+</div>
+
+<div id="overlay">
+  <div id="sheet">
+    <button id="closeSheet">✕</button>
+    <h2>Settings</h2>
+
+    <div class="field">
+      <label>Deepgram API Key</label>
+      <div class="rowflex">
+        <input type="password" id="apiKey" placeholder="Paste your API key">
+        <button id="toggleKey">Show</button>
+      </div>
+      <div class="hint">
+        Free to get, $200 in credit, no card required. Sign up at
+        <a href="https://console.deepgram.com/signup" target="_blank">console.deepgram.com/signup</a>,
+        create a project, then create an API key. Stored only on this phone.
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Model</label>
+      <select id="modelSelect">
+        <option value="nova-3">Nova-3 (best accuracy, recommended)</option>
+        <option value="nova-2">Nova-2</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Boost words (comma-separated)</label>
+      <textarea id="vocabField" placeholder="Subcontain, Molok, roll-off, hauling…"></textarea>
+      <div class="hint">Names, jargon, and business terms Apple always gets wrong. These get boosted so the engine recognizes them.</div>
+    </div>
+
+    <div class="field">
+      <label>Auto-correct (one per line: wrong => right)</label>
+      <textarea id="correctField" placeholder="sub contain => Subcontain
+moloch => Molok"></textarea>
+      <div class="hint">Applied after transcription, as a safety net for words boosting doesn't fully fix.</div>
+    </div>
+
+    <div class="toggle-row">
+      <div>Spoken punctuation<div class="sub">Say "comma", "period", "new paragraph", etc.</div></div>
+      <label class="switch"><input type="checkbox" id="toggleCmds" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div>Emoji by voice<div class="sub">Say "thumbs up emoji", "fire emoji", etc.</div></div>
+      <label class="switch"><input type="checkbox" id="toggleEmoji" checked><span class="slider"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div>Smart formatting<div class="sub">Auto punctuation, numbers, dates</div></div>
+      <label class="switch"><input type="checkbox" id="toggleSmart" checked><span class="slider"></span></label>
+    </div>
+
+    <button id="saveBtn">Save</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- Settings persistence ----------
+  var DEFAULT_VOCAB = "Subcontain, Vertex Waste Management, Molok, roll-off, hauling, dumpster, CDL, waste bin, recycling";
+  var DEFAULT_CORRECT = "sub contain => Subcontain\nmoloch => Molok\nvertex waste => Vertex Waste Management";
+
+  function loadSettings(){
+    var s = {};
+    try{ s = JSON.parse(localStorage.getItem("dictate_settings") || "{}"); }catch(e){ s = {}; }
+    return {
+      apiKey: s.apiKey || "",
+      model: s.model || "nova-3",
+      vocab: (s.vocab !== undefined) ? s.vocab : DEFAULT_VOCAB,
+      correct: (s.correct !== undefined) ? s.correct : DEFAULT_CORRECT,
+      cmds: (s.cmds !== undefined) ? s.cmds : true,
+      emoji: (s.emoji !== undefined) ? s.emoji : true,
+      smart: (s.smart !== undefined) ? s.smart : true
+    };
+  }
+  function saveSettings(s){
+    localStorage.setItem("dictate_settings", JSON.stringify(s));
+  }
+  var settings = loadSettings();
+
+  // ---------- DOM refs ----------
+  var recBtn = document.getElementById("recBtn");
+  var recLabel = document.getElementById("recLabel");
+  var statusLine = document.getElementById("statusLine");
+  var transcriptEl = document.getElementById("transcript");
+  var settingsBtn = document.getElementById("settingsBtn");
+  var overlay = document.getElementById("overlay");
+  var closeSheet = document.getElementById("closeSheet");
+  var saveBtn = document.getElementById("saveBtn");
+  var apiKeyInput = document.getElementById("apiKey");
+  var toggleKeyBtn = document.getElementById("toggleKey");
+  var modelSelect = document.getElementById("modelSelect");
+  var vocabField = document.getElementById("vocabField");
+  var correctField = document.getElementById("correctField");
+  var toggleCmds = document.getElementById("toggleCmds");
+  var toggleEmoji = document.getElementById("toggleEmoji");
+  var toggleSmart = document.getElementById("toggleSmart");
+  var copyBtn = document.getElementById("copyBtn");
+  var shareBtn = document.getElementById("shareBtn");
+  var clearBtn = document.getElementById("clearBtn");
+  var installTip = document.getElementById("installTip");
+  var dismissTip = document.getElementById("dismissTip");
+
+  function fillSheetFromSettings(){
+    apiKeyInput.value = settings.apiKey;
+    modelSelect.value = settings.model;
+    vocabField.value = settings.vocab;
+    correctField.value = settings.correct;
+    toggleCmds.checked = settings.cmds;
+    toggleEmoji.checked = settings.emoji;
+    toggleSmart.checked = settings.smart;
+  }
+
+  settingsBtn.addEventListener("click", function(){
+    fillSheetFromSettings();
+    overlay.style.display = "flex";
+  });
+  closeSheet.addEventListener("click", function(){ overlay.style.display = "none"; });
+  overlay.addEventListener("click", function(e){ if(e.target === overlay) overlay.style.display = "none"; });
+  toggleKeyBtn.addEventListener("click", function(){
+    if(apiKeyInput.type === "password"){ apiKeyInput.type = "text"; toggleKeyBtn.textContent = "Hide"; }
+    else{ apiKeyInput.type = "password"; toggleKeyBtn.textContent = "Show"; }
+  });
+
+  saveBtn.addEventListener("click", function(){
+    settings = {
+      apiKey: apiKeyInput.value.trim(),
+      model: modelSelect.value,
+      vocab: vocabField.value,
+      correct: correctField.value,
+      cmds: toggleCmds.checked,
+      emoji: toggleEmoji.checked,
+      smart: toggleSmart.checked
+    };
+    saveSettings(settings);
+    overlay.style.display = "none";
+    if(!settings.apiKey){
+      statusLine.textContent = "Add your Deepgram API key in Settings";
+    } else {
+      statusLine.textContent = "Tap to start";
+    }
+  });
+
+  if(!settings.apiKey){
+    statusLine.textContent = "Add your Deepgram API key in Settings";
+  }
+
+  // ---------- Install tip (Add to Home Screen) ----------
+  var isStandalone = window.navigator.standalone === true ||
+                      window.matchMedia("(display-mode: standalone)").matches;
+  if(!isStandalone && !localStorage.getItem("dictate_hide_install_tip")){
+    installTip.style.display = "flex";
+  }
+  dismissTip.addEventListener("click", function(){
+    installTip.style.display = "none";
+    localStorage.setItem("dictate_hide_install_tip", "1");
+  });
+
+  // ---------- Text post-processing ----------
+  var PUNCT_RULES = [
+    [/\s*\bnew paragraph\b\s*/gi, "\n\n"],
+    [/\s*\bnew line\b\s*/gi, "\n"],
+    [/\s*\bopen quote\b\s*/gi, ' "'],
+    [/\s*\bclose quote\b\s*/gi, '" '],
+    [/\s*\bend quote\b\s*/gi, '" '],
+    [/\s*\bexclamation point\b\s*/gi, "! "],
+    [/\s*\bexclamation mark\b\s*/gi, "! "],
+    [/\s*\bquestion mark\b\s*/gi, "? "],
+    [/\s*\bfull stop\b\s*/gi, ". "],
+    [/\s*\bperiod\b\s*/gi, ". "],
+    [/\s*\bcomma\b\s*/gi, ", "],
+    [/\s*\bcolon\b\s*/gi, ": "],
+    [/\s*\bsemicolon\b\s*/gi, "; "]
+  ];
+
+  var EMOJI_RULES = [
+    ["thumbs up emoji", "👍"], ["thumbs up", "👍"],
+    ["thumbs down emoji", "👎"], ["thumbs down", "👎"],
+    ["laughing emoji", "😂"], ["crying laughing emoji", "😂"],
+    ["smiley face emoji", "🙂"], ["smiley emoji", "🙂"], ["smiley face", "🙂"],
+    ["winking face emoji", "😉"], ["wink emoji", "😉"],
+    ["sad face emoji", "😢"], ["sad emoji", "😢"],
+    ["angry emoji", "😠"],
+    ["heart emoji", "❤️"],
+    ["fire emoji", "🔥"],
+    ["clapping emoji", "👏"], ["clap emoji", "👏"],
+    ["party popper emoji", "🎉"], ["party emoji", "🎉"],
+    ["check mark emoji", "✅"], ["checkmark emoji", "✅"],
+    ["cross mark emoji", "❌"], ["x emoji", "❌"],
+    ["eyes emoji", "👀"],
+    ["thinking face emoji", "🤔"], ["thinking emoji", "🤔"],
+    ["hundred emoji", "💯"], ["100 emoji", "💯"],
+    ["rocket emoji", "🚀"],
+    ["star emoji", "⭐"],
+    ["raised hands emoji", "🙌"],
+    ["praying hands emoji", "🙏"], ["pray emoji", "🙏"],
+    ["flexed bicep emoji", "💪"], ["muscle emoji", "💪"],
+    ["waving hand emoji", "👋"], ["wave emoji", "👋"],
+    ["ok hand emoji", "👌"],
+    ["skull emoji", "💀"]
+  ].sort(function(a,b){ return b[0].length - a[0].length; });
+
+  function parseCorrections(text){
+    var pairs = [];
+    text.split("\n").forEach(function(line){
+      var parts = line.split("=>");
+      if(parts.length === 2){
+        var wrong = parts[0].trim();
+        var right = parts[1].trim();
+        if(wrong && right) pairs.push([wrong, right]);
+      }
+    });
+    return pairs;
+  }
+
+  function escapeRegex(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+
+  function postProcess(text){
+    var out = text;
+    if(settings.cmds){
+      PUNCT_RULES.forEach(function(rule){ out = out.replace(rule[0], rule[1]); });
+      out = out.replace(/[ \t]+([.,!?;:])/g, "$1");
+      out = out.replace(/[ \t]{2,}/g, " ");
+    }
+    if(settings.emoji){
+      EMOJI_RULES.forEach(function(pair){
+        var re = new RegExp("\\b" + escapeRegex(pair[0]) + "\\b", "gi");
+        out = out.replace(re, pair[1]);
+      });
+    }
+    var corrections = parseCorrections(settings.correct || "");
+    corrections.forEach(function(pair){
+      var re = new RegExp("\\b" + escapeRegex(pair[0]) + "\\b", "gi");
+      out = out.replace(re, pair[1]);
+    });
+    return out;
+  }
+
+  // ---------- Transcript rendering ----------
+  var finalText = localStorage.getItem("dictate_last_transcript") || "";
+  var interimSpan = null;
+
+  function escapeHtml(str){
+    var div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function renderBase(){
+    transcriptEl.innerHTML = escapeHtml(finalText);
+  }
+  renderBase();
+
+  function appendFinal(chunk){
+    if(!chunk) return;
+    var needsSpace = finalText.length > 0 &&
+                      !/\s$/.test(finalText) &&
+                      !/^[\s.,!?;:\n]/.test(chunk);
+    finalText = finalText + (needsSpace ? " " : "") + chunk;
+    localStorage.setItem("dictate_last_transcript", finalText);
+    renderBase();
+    scrollToBottom();
+  }
+
+  function showInterim(text){
+    var needsSpace = finalText && text;
+    transcriptEl.innerHTML = escapeHtml(finalText) + (needsSpace ? " " : "") +
+      '<span class="interim">' + escapeHtml(text) + '</span>';
+    scrollToBottom();
+  }
+
+  function scrollToBottom(){
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  // Let the user edit the transcript by hand; only overwrite finalText from
+  // our own updates, and re-sync if they type directly into the box.
+  transcriptEl.addEventListener("blur", function(){
+    finalText = transcriptEl.textContent;
+    localStorage.setItem("dictate_last_transcript", finalText);
+  });
+
+  // ---------- Recording / streaming ----------
+  var mediaStream = null;
+  var mediaRecorder = null;
+  var socket = null;
+  var isRecording = false;
+  var keepGoing = false;
+  var pendingChunks = [];
+  var reconnectTimer = null;
+  var socketOpen = false;
+
+  function buildSocketUrl(){
+    var model = settings.model || "nova-3";
+    var params = [
+      "model=" + encodeURIComponent(model),
+      "language=en-US",
+      "interim_results=true",
+      "punctuate=true",
+      "smart_format=" + (settings.smart ? "true" : "false"),
+      "endpointing=300",
+      "utterance_end_ms=1000"
+    ];
+    var vocabWords = (settings.vocab || "").split(",").map(function(w){ return w.trim(); }).filter(Boolean);
+    vocabWords.forEach(function(w){
+      if(model === "nova-3"){
+        params.push("keyterm=" + encodeURIComponent(w));
+      } else {
+        params.push("keywords=" + encodeURIComponent(w) + ":1.5");
+      }
+    });
+    return "wss://api.deepgram.com/v1/listen?" + params.join("&");
+  }
+
+  function openSocket(){
+    if(!settings.apiKey){
+      setStatus("Add your Deepgram API key in Settings", true);
+      stopRecording();
+      return;
+    }
+    var url = buildSocketUrl();
+    socket = new WebSocket(url, ["token", settings.apiKey]);
+    socketOpen = false;
+
+    socket.onopen = function(){
+      socketOpen = true;
+      setStatus("Listening…");
+      flushPending();
+    };
+
+    socket.onmessage = function(event){
+      var msg;
+      try{ msg = JSON.parse(event.data); }catch(e){ return; }
+      if(msg.type === "Results" || msg.channel){
+        var alt = msg.channel && msg.channel.alternatives && msg.channel.alternatives[0];
+        if(!alt) return;
+        var text = alt.transcript || "";
+        if(!text) return;
+        if(msg.is_final){
+          appendFinal(postProcess(text));
+        } else {
+          showInterim(text);
+        }
+      } else if(msg.type === "UtteranceEnd"){
+        // no-op: is_final results already flushed
+      } else if(msg.type === "Error"){
+        setStatus("Deepgram error: " + (msg.description || "unknown"), true);
+      }
+    };
+
+    socket.onerror = function(){
+      // onclose will follow; handled there
+    };
+
+    socket.onclose = function(evt){
+      socketOpen = false;
+      if(keepGoing){
+        setStatus("Reconnecting…");
+        reconnectTimer = setTimeout(function(){
+          if(keepGoing) openSocket();
+        }, 700);
+      }
+    };
+  }
+
+  function flushPending(){
+    if(!socketOpen) return;
+    while(pendingChunks.length){
+      var chunk = pendingChunks.shift();
+      try{ socket.send(chunk); }catch(e){ pendingChunks.unshift(chunk); break; }
+    }
+  }
+
+  function pickMimeType(){
+    var candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/mp4;codecs=mp4a.40.2",
+      "audio/aac"
+    ];
+    for(var i=0;i<candidates.length;i++){
+      if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(candidates[i])){
+        return candidates[i];
+      }
+    }
+    return ""; // let the browser pick a default
+  }
+
+  function startRecording(){
+    if(!settings.apiKey){
+      fillSheetFromSettings();
+      overlay.style.display = "flex";
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      setStatus("Microphone not available in this browser", true);
+      return;
+    }
+    setStatus("Requesting microphone…");
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream){
+      mediaStream = stream;
+      var mimeType = pickMimeType();
+      var opts = mimeType ? { mimeType: mimeType } : undefined;
+      try{
+        mediaRecorder = opts ? new MediaRecorder(stream, opts) : new MediaRecorder(stream);
+      }catch(e){
+        mediaRecorder = new MediaRecorder(stream);
+      }
+      pendingChunks = [];
+      keepGoing = true;
+      isRecording = true;
+
+      mediaRecorder.ondataavailable = function(e){
+        if(e.data && e.data.size > 0){
+          if(socketOpen){
+            try{ socket.send(e.data); }catch(err){ pendingChunks.push(e.data); }
+          } else {
+            pendingChunks.push(e.data);
+          }
+        }
+      };
+      mediaRecorder.onstop = function(){
+        mediaStream.getTracks().forEach(function(t){ t.stop(); });
+      };
+
+      mediaRecorder.start(250);
+      recBtn.classList.add("recording");
+      recLabel.textContent = "Tap to stop";
+      openSocket();
+    }).catch(function(err){
+      setStatus("Microphone permission denied", true);
+    });
+  }
+
+  function stopRecording(){
+    keepGoing = false;
+    isRecording = false;
+    clearTimeout(reconnectTimer);
+    if(mediaRecorder && mediaRecorder.state !== "inactive"){
+      try{ mediaRecorder.stop(); }catch(e){}
+    }
+    if(socket && (socket.readyState === 0 || socket.readyState === 1)){
+      try{ socket.close(); }catch(e){}
+    }
+    socketOpen = false;
+    pendingChunks = [];
+    recBtn.classList.remove("recording");
+    recLabel.textContent = "Tap the mic to start dictating";
+    setStatus("Tap to start");
+    // finalize any interim text left on screen
+    renderBase();
+  }
+
+  function setStatus(text, isError){
+    statusLine.textContent = text;
+    statusLine.style.color = isError ? "#ff6b6b" : "";
+  }
+
+  recBtn.addEventListener("click", function(){
+    if(isRecording){ stopRecording(); }
+    else{ startRecording(); }
+  });
+
+  // ---------- Toolbar actions ----------
+  copyBtn.addEventListener("click", function(){
+    var text = transcriptEl.textContent;
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){
+        flashLabel(copyBtn, "Copied!");
+      }).catch(function(){ fallbackCopy(text); });
+    } else {
+      fallbackCopy(text);
+    }
+  });
+  function fallbackCopy(text){
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand("copy"); flashLabel(copyBtn, "Copied!"); }catch(e){}
+    document.body.removeChild(ta);
+  }
+  function flashLabel(btn, msg){
+    var old = btn.textContent;
+    btn.textContent = msg;
+    setTimeout(function(){ btn.textContent = old; }, 1200);
+  }
+
+  shareBtn.addEventListener("click", function(){
+    var text = transcriptEl.textContent;
+    if(navigator.share){
+      navigator.share({ text: text }).catch(function(){});
+    } else {
+      fallbackCopy(text);
+      flashLabel(shareBtn, "Copied!");
+    }
+  });
+
+  clearBtn.addEventListener("click", function(){
+    finalText = "";
+    localStorage.setItem("dictate_last_transcript", "");
+    renderBase();
+  });
+
+  // Prevent accidental page scroll/bounce
+  document.addEventListener("touchmove", function(e){
+    if(!transcriptEl.contains(e.target)) e.preventDefault();
+  }, { passive:false });
+
+})();
+</script>
+</body>
+</html>
